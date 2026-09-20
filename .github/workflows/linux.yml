@@ -56,3 +56,52 @@ jobs:
 
       - name: Test
         run: make test TEST_VERBOSE=1
+
+  dbi-compat:
+    name: DBI compatibility (Perl 5.40, DBI ${{ matrix.dbi }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        dbi:
+          - "1.643"
+          - "1.650"
+          - "1.652"
+          - "1.653"
+
+    env:
+      DBI_DSN: "dbi:ODBC:DRIVER=SQLite3"
+      PERL_MM_USE_DEFAULT: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install unixODBC and SQLite ODBC driver
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y unixodbc unixodbc-dev libsqliteodbc
+
+      - name: Set up Perl
+        uses: shogo82148/actions-setup-perl@v1
+        with:
+          perl-version: "5.40"
+
+      - name: Install selected DBI and test dependencies
+        run: |
+          cpanm --notest "DBI@${{ matrix.dbi }}"
+          cpanm --notest Test::Simple Test::Output Test::NoWarnings
+
+      - name: Show versions
+        run: |
+          perl -V
+          perl -MDBI -e 'print "DBI=$DBI::VERSION\n"'
+          odbcinst -j
+          odbcinst -q -d || true
+
+      - name: Configure and build
+        run: |
+          perl Makefile.PL
+          make
+
+      - name: Run sql_type_cast regression test
+        run: prove -lv t/sql_type_cast.t
