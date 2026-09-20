@@ -104,4 +104,4 @@ jobs:
           make
 
       - name: Run sql_type_cast regression test
-        run: prove -lv t/sql_type_cast.t
+        run: make test TEST_FILES=t/sql_type_cast.t TEST_VERBOSE=1
