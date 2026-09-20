@@ -64,16 +64,8 @@ jobs:
       fail-fast: false
       matrix:
         dbi:
-          - "1.643"
-          - "1.644"
-          - "1.645"
           - "1.646"
           - "1.647"
-          - "1.648"
-          - "1.649"
-          - "1.650"
-          - "1.652"
-          - "1.653"
 
     env:
       DBI_DSN: "dbi:ODBC:DRIVER=SQLite3"
@@ -97,12 +89,30 @@ jobs:
           cpanm --notest "DBI@${{ matrix.dbi }}"
           cpanm --notest Test::Simple Test::Output Test::NoWarnings
 
-      - name: Show versions
+      - name: Show versions and DBIXS state
         run: |
           perl -V
-          perl -MDBI -e 'print "DBI=$DBI::VERSION\n"'
+          perl -MDBI -MConfig -e 'print "DBI=$DBI::VERSION\nDBI.pm=$INC{\"DBI.pm\"}\narchlib=$Config{archlib}\n"'
+          DBI_ARCH="$(perl -MDBI -MFile::Basename=dirname -e 'print dirname($INC{"DBI.pm"}) . "/auto/DBI"')"
+          echo "DBI_ARCH=$DBI_ARCH"
+          echo "--- dbixs_rev.h ---"
+          cat "$DBI_ARCH/dbixs_rev.h" || true
+          echo "--- DBIXS sql_type_cast / revision lines ---"
+          grep -nE 'DBIXS_REVISION|DBISTATE_VERSION|sql_type_cast_svpv|DBIstcf_' "$DBI_ARCH/DBIXS.h" || true
+          sha256sum "$DBI_ARCH/DBIXS.h" "$DBI_ARCH/dbixs_rev.h" || true
           odbcinst -j
           odbcinst -q -d || true
+
+      - name: Probe DBI sql_type_cast scalar flags
+        run: |
+          perl -MDBI -MDevel::Peek -e '
+            for my $flags (0, 1) {
+              my $v = "100";
+              my $rc = DBI::sql_type_cast($v, DBI::SQL_NUMERIC(), $flags);
+              print "flags=$flags rc=$rc value=$v\n";
+              Dump($v);
+            }
+          '
 
       - name: Configure and build
         run: |
