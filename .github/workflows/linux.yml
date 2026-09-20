@@ -1,0 +1,58 @@
+name: Linux CI
+
+on:
+  push:
+    branches: [ master, "ci/**" ]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        perl:
+          - "5.40"
+          - "5.38"
+        unicode:
+          - false
+          - true
+
+    env:
+      DBI_DSN: "dbi:ODBC:DRIVER=SQLite3"
+      PERL_MM_USE_DEFAULT: "1"
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install unixODBC and SQLite ODBC driver
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y unixodbc unixodbc-dev libsqliteodbc
+
+      - name: Set up Perl
+        uses: shogo82148/actions-setup-perl@v1
+        with:
+          perl-version: ${{ matrix.perl }}
+
+      - name: Install Perl dependencies
+        run: |
+          cpanm --notest DBI Test::Simple Test::Output
+          cpanm --notest Test::Pod Test::Pod::Coverage Test::Kwalitee Test::NoWarnings || true
+
+      - name: Show ODBC configuration
+        run: |
+          perl -V
+          odbcinst -j
+          odbcinst -q -d || true
+
+      - name: Configure
+        env:
+          DBD_ODBC_UNICODE: ${{ matrix.unicode && '1' || '' }}
+        run: perl Makefile.PL
+
+      - name: Build
+        run: make
+
+      - name: Test
+        run: make test TEST_VERBOSE=1
