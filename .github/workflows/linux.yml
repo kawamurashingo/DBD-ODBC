@@ -66,6 +66,7 @@ jobs:
         dbi:
           - "1.646"
           - "1.647"
+          - "1.653"
 
     env:
       DBI_DSN: "dbi:ODBC:DRIVER=SQLite3"
@@ -118,6 +119,18 @@ jobs:
         run: |
           perl Makefile.PL
           make
+
+      - name: Inspect DBD::ODBC DBIXS compile gate
+        run: |
+          DBI_ARCH="$(perl -MDBI -MFile::Basename=dirname -e 'print dirname($INC{"DBI.pm"}) . "/auto/DBI"')"
+          REV="$(awk '/^#define DBIXS_REVISION / { print $3 }' "$DBI_ARCH/dbixs_rev.h")"
+          echo "DBIXS_REVISION=$REV"
+          if [ "$REV" -gt 13590 ]; then
+            echo "DBD::ODBC sql_type_cast_svpv path: ENABLED"
+          else
+            echo "DBD::ODBC sql_type_cast_svpv path: DISABLED"
+          fi
+          grep -n -A45 -B5 'DBIXS_REVISION > 13590' dbdimp.c
 
       - name: Run sql_type_cast regression test
         run: make test TEST_FILES=t/sql_type_cast.t TEST_VERBOSE=1
